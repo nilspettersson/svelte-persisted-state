@@ -2,24 +2,48 @@
 export function persistedState<T>(
 	key: string,
 	defaultValue: T,
-	options: { persistedType: 'localstorage' | 'sessionstorage'; manualUpdate: true }
+	options: {
+		persistedType: 'localstorage' | 'sessionstorage';
+		manualUpdate: true;
+		outsideComponentInitialisation?: boolean;
+	}
 ): { value: T; updateStorage: () => void };
 
 export function persistedState<T>(
 	key: string,
 	defaultValue: T,
-	options?: { persistedType: 'localstorage' | 'sessionstorage'; manualUpdate?: false | undefined }
+	options?: {
+		persistedType: 'localstorage' | 'sessionstorage';
+		manualUpdate?: false | undefined;
+		outsideComponentInitialisation?: false | undefined;
+	}
 ): { value: T };
+
+export function persistedState<T>(
+	key: string,
+	defaultValue: T,
+	options?: {
+		persistedType: 'localstorage' | 'sessionstorage';
+		manualUpdate?: false | undefined;
+		outsideComponentInitialisation?: true;
+	}
+): { value: T; cleanup: () => void };
 
 //Implementation
 export function persistedState<T>(
 	key: string,
 	defaultValue: T,
-	options: { persistedType: 'localstorage' | 'sessionstorage'; manualUpdate?: boolean } = {
+	options: {
+		persistedType: 'localstorage' | 'sessionstorage';
+		manualUpdate?: boolean;
+		outsideComponentInitialisation?: boolean;
+	} = {
 		persistedType: 'localstorage',
-		manualUpdate: false
+		manualUpdate: false,
+		outsideComponentInitialisation: false
 	}
 ) {
+	let rootCleanup: () => void = () => {};
 	if (typeof localStorage === 'undefined') {
 		if (options.manualUpdate === true) {
 			return { value: defaultValue, updateStorage: () => {} };
@@ -50,13 +74,26 @@ export function persistedState<T>(
 		storage.removeItem(key);
 	}
 	if (!options.manualUpdate) {
-		$effect(() => {
-			updateStorage();
-		});
+		if ($effect.tracking()) {
+			console.log('effect is tracking');
+
+			$effect(() => {
+				updateStorage();
+			});
+		} else {
+			rootCleanup = $effect.root(() => {
+				$effect(() => {
+					updateStorage();
+				});
+				return () => {
+					console.log('cleanup');
+				};
+			});
+		}
 	}
 
 	function updateStorage() {
-		console.log('Update localStorage With value: ', value);
+		console.log('Update localStorage');
 
 		if (typeof value === 'string') {
 			storage.setItem(key, value as string);
@@ -75,6 +112,16 @@ export function persistedState<T>(
 				value = v;
 			},
 			updateStorage
+		};
+	} else if (options.outsideComponentInitialisation === true) {
+		return {
+			get value() {
+				return value;
+			},
+			set value(v) {
+				value = v;
+			},
+			cleanup: rootCleanup
 		};
 	} else {
 		return {

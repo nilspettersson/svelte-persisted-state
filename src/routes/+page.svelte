@@ -1,14 +1,12 @@
 <script lang="ts">
-	import { localStorageState } from '$lib/local-storage-state.svelte.js';
-
-	let x = localStorageState('x', 'hello');
+	import { x } from '$lib/store.svelte.js';
 </script>
 
-<h1>Welcome to your library project</h1>
-<p>Create your package using @sveltejs/package and preview/showcase your work with SvelteKit</p>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
-
-value in local storage: {x.value}
+value in local storage: {x.value.name}
 <br />
 <br />
-<input bind:value={x.value} />
+<input bind:value={x.value.name} />
+<br />
+<br />
+<!-- <button onclick={() => x.updateStorage()}>Save</button> -->
+<button onclick={() => x.cleanup()}>clear</button>
