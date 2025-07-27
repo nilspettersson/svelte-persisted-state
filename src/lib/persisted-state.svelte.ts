@@ -75,8 +75,6 @@ export function persistedState<T>(
 	}
 	if (!options.manualUpdate) {
 		if ($effect.tracking()) {
-			console.log('effect is tracking');
-
 			$effect(() => {
 				updateStorage();
 			});
@@ -85,16 +83,11 @@ export function persistedState<T>(
 				$effect(() => {
 					updateStorage();
 				});
-				return () => {
-					console.log('cleanup');
-				};
 			});
 		}
 	}
 
 	function updateStorage() {
-		console.log('Update localStorage');
-
 		if (typeof value === 'string') {
 			storage.setItem(key, value as string);
 		} else if (typeof value === 'number') {
