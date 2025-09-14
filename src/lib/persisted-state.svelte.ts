@@ -82,10 +82,27 @@ export function persistedState<T>(
 		safe(() => storage.setItem(key, serialize(value)));
 	}
 
-	const base = { value, cleanup: rootCleanup } as { value: T; cleanup: typeof rootCleanup };
+	const base = { cleanup: rootCleanup } as { cleanup: typeof rootCleanup };
 
 	if (options.manualUpdate) {
-		return { ...base, updateStorage };
+		return {
+			...base,
+			updateStorage,
+			get value() {
+				return value;
+			},
+			set value(v) {
+				value = v;
+			}
+		};
 	}
-	return base;
+	return {
+		...base,
+		get value() {
+			return value;
+		},
+		set value(v) {
+			value = v;
+		}
+	};
 }

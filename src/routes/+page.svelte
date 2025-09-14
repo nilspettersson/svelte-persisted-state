@@ -1,12 +1,18 @@
-<script lang="ts">
-	import { x } from '$lib/store.svelte.js';
+<script>
+	import { persistedState } from '$lib/persisted-state.svelte.js';
+
+	let counter = persistedState('counter', 0, {
+		persistedType: 'localstorage'
+	});
+
+	function inc() {
+		counter.value += 1;
+	}
+	function reset() {
+		counter.value = 0;
+	}
 </script>
 
-value in local storage: {x.value.name}
-<br />
-<br />
-<input bind:value={x.value.name} />
-<br />
-<br />
-<!-- <button onclick={() => x.updateStorage()}>Save</button> -->
-<button onclick={() => x.cleanup()}>clear</button>
+<button on:click={inc}>+1</button>
+<button on:click={reset}>Reset</button>
+<p>Count: {counter.value}</p>
