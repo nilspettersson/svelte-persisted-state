@@ -1,31 +1,30 @@
+type BaseOptions = {
+	persistedType: StorageKind;
+	onError?: (err: unknown) => void;
+};
+
+type StorageKind = 'localstorage' | 'sessionstorage';
+function resolveStorage(spec: StorageKind | Storage | undefined): Storage | null {
+	if (typeof globalThis === 'undefined') return null;
+	if (!spec || spec === 'localstorage') return (globalThis as any).localStorage ?? null;
+	if (spec === 'sessionstorage') return (globalThis as any).sessionStorage ?? null;
+	return spec;
+}
+
 //Overloads
 export function persistedState<T>(
 	key: string,
 	defaultValue: T,
-	options: {
-		persistedType: 'localstorage' | 'sessionstorage';
+	options: BaseOptions & {
 		manualUpdate: true;
-		outsideComponentInitialisation?: boolean;
 	}
-): { value: T; updateStorage: () => void };
+): { value: T; updateStorage: () => void; cleanup: () => void };
 
 export function persistedState<T>(
 	key: string,
 	defaultValue: T,
-	options?: {
-		persistedType: 'localstorage' | 'sessionstorage';
+	options?: BaseOptions & {
 		manualUpdate?: false | undefined;
-		outsideComponentInitialisation?: false | undefined;
-	}
-): { value: T };
-
-export function persistedState<T>(
-	key: string,
-	defaultValue: T,
-	options?: {
-		persistedType: 'localstorage' | 'sessionstorage';
-		manualUpdate?: false | undefined;
-		outsideComponentInitialisation?: true;
 	}
 ): { value: T; cleanup: () => void };
 
@@ -33,46 +32,37 @@ export function persistedState<T>(
 export function persistedState<T>(
 	key: string,
 	defaultValue: T,
-	options: {
-		persistedType: 'localstorage' | 'sessionstorage';
-		manualUpdate?: boolean;
-		outsideComponentInitialisation?: boolean;
-	} = {
-		persistedType: 'localstorage',
-		manualUpdate: false,
-		outsideComponentInitialisation: false
+	options: BaseOptions & { manualUpdate?: boolean } = {
+		persistedType: 'localstorage'
 	}
 ) {
-	let rootCleanup: () => void = () => {};
-	if (typeof localStorage === 'undefined') {
-		if (options.manualUpdate === true) {
-			return { value: defaultValue, updateStorage: () => {} };
-		} else {
-			return { value: defaultValue };
+	const parse = (s: string): T => /*options.parse ? options.parse(s) :*/ JSON.parse(s) as T;
+
+	const serialize = (v: T): string =>
+		/*options.serialize ? options.serialize(v) :*/ JSON.stringify(v);
+
+	const safe = <R>(fn: () => R): R | undefined => {
+		try {
+			return fn();
+		} catch (error) {
+			options.onError?.(error);
+			return undefined;
 		}
-	}
+	};
+
+	const storage = resolveStorage(options.persistedType);
 
 	let value = $state(defaultValue);
 
-	const storage = options.persistedType === 'localstorage' ? localStorage : sessionStorage;
-
-	try {
-		sessionStorage;
-		let valueInLocalStorage = storage.getItem(key);
-		if (valueInLocalStorage) {
-			if (typeof value === 'string') {
-				value = valueInLocalStorage as T;
-			} else if (typeof value === 'number') {
-				value = parseFloat(valueInLocalStorage) as T;
-			} else if (typeof value === 'object') {
-				value = JSON.parse(valueInLocalStorage) as T;
-			} else if (typeof value === 'boolean') {
-				value = (valueInLocalStorage === 'true') as T;
-			}
+	let rootCleanup: () => void = () => {};
+	if (storage) {
+		let raw = safe(() => storage.getItem(key));
+		if (raw !== null && raw !== undefined) {
+			const parsed = safe(() => parse(raw));
+			if (parsed !== undefined) value = parsed;
 		}
-	} catch (e) {
-		storage.removeItem(key);
 	}
+
 	if (!options.manualUpdate) {
 		if ($effect.tracking()) {
 			$effect(() => {
@@ -88,42 +78,14 @@ export function persistedState<T>(
 	}
 
 	function updateStorage() {
-		if (typeof value === 'string') {
-			storage.setItem(key, value as string);
-		} else if (typeof value === 'number') {
-			storage.setItem(key, String(value as number));
-		} else if (typeof value === 'object') {
-			storage.setItem(key, JSON.stringify(value));
-		}
+		if (!storage) return;
+		safe(() => storage.setItem(key, serialize(value)));
 	}
+
+	const base = { value, cleanup: rootCleanup } as { value: T; cleanup: typeof rootCleanup };
+
 	if (options.manualUpdate) {
-		return {
-			get value() {
-				return value;
-			},
-			set value(v) {
-				value = v;
-			},
-			updateStorage
-		};
-	} else if (options.outsideComponentInitialisation === true) {
-		return {
-			get value() {
-				return value;
-			},
-			set value(v) {
-				value = v;
-			},
-			cleanup: rootCleanup
-		};
-	} else {
-		return {
-			get value() {
-				return value;
-			},
-			set value(v) {
-				value = v;
-			}
-		};
+		return { ...base, updateStorage };
 	}
+	return base;
 }
